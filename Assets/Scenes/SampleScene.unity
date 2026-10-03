@@ -232,7 +232,7 @@ RectTransform:
   m_LocalEulerAnglesHint: {x: 0, y: 0, z: 0}
   m_AnchorMin: {x: 0.5, y: 1}
   m_AnchorMax: {x: 0.5, y: 1}
-  m_AnchoredPosition: {x: 0, y: 0}
+  m_AnchoredPosition: {x: 0, y: -11.5}
   m_SizeDelta: {x: 100, y: 100}
   m_Pivot: {x: 0.5, y: 1}
 --- !u!114 &207192700
@@ -538,7 +538,7 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: 81e4d710c90d7954ca085e8fec2600eb, type: 3}
   m_Name: 
   m_EditorClassIdentifier: Assembly-CSharp::RoundManager
-  monsterPrefab: {fileID: 3175816639902823134, guid: b8cb6ab5926f7e54cb703045923bb61d, type: 3}
+  monsterPrefab: {fileID: 7882784126973474519, guid: 1b078c43579880644a7c80add431eb42, type: 3}
   totalRondas: 5
   monstruosPrimeraRonda: 1
   monstruosExtraPorRonda: 1
@@ -548,7 +548,7 @@ MonoBehaviour:
   alturaBajoCamara: 1.2
   rondaText: {fileID: 674089134}
   anuncioText: {fileID: 608799874}
-  iniciarAlComenzar: 1
+  iniciarAlComenzar: 0
   botonReintentar: {fileID: 1533125654}
 --- !u!4 &487099281
 Transform:
@@ -1684,15 +1684,15 @@ MonoBehaviour:
   m_Name: 
   m_EditorClassIdentifier: Assembly-CSharp::ARGPS
   sessionOrigin: {fileID: 1964602098}
-  prefab: {fileID: 3175816639902823134, guid: b8cb6ab5926f7e54cb703045923bb61d, type: 3}
+  prefab: {fileID: 7882784126973474519, guid: 1b078c43579880644a7c80add431eb42, type: 3}
   distanceText: {fileID: 48938186}
   messageText: {fileID: 1466673288}
-  targetLatitude: 3.5331137
-  targetLongitude: -76.2897052
+  targetLatitude: 3.353695
+  targetLongitude: -76.522381
   discoveryDistance: 10
   spawnDistance: 2
   heightBelowCamera: 1.2
-  roundManager: {fileID: 0}
+  roundManager: {fileID: 487099280}
   latitude: 0
   longitude: 0
   altitude: 0
