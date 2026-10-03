@@ -1,42 +1,77 @@
 using UnityEngine;
+#if ENABLE_INPUT_SYSTEM
+using UnityEngine.InputSystem;
+#endif
 
 public class ARShooter : MonoBehaviour
 {
-    [SerializeField] private Camera arCamera; // Tu cámara principal de AR
+    [SerializeField] private Camera arCamera;
     [SerializeField] private int danoPorDisparo = 10;
 
-    void Update()
+    private void Awake()
     {
-        // Detectamos si el jugador tocó la pantalla
-        if (Input.touchCount > 0)
-        {
-            Touch toque = Input.GetTouch(0);
+        if (arCamera == null)
+            arCamera = Camera.main;
+    }
 
-            // Solo disparamos en el momento exacto en que el dedo toca la pantalla
-            if (toque.phase == TouchPhase.Began)
+    private void Update()
+    {
+        if (TryGetTap(out Vector2 posicion))
+            Disparar(posicion);
+    }
+
+    private bool TryGetTap(out Vector2 posicion)
+    {
+        posicion = default;
+
+#if ENABLE_INPUT_SYSTEM
+        var pantalla = Touchscreen.current;
+        if (pantalla != null)
+        {
+            if (pantalla.primaryTouch.press.wasPressedThisFrame)
             {
-                Disparar(toque.position);
+                posicion = pantalla.primaryTouch.position.ReadValue();
+                return true;
             }
+            return false; // Input System activo: no consultar el legacy
         }
+#endif
+
+#if ENABLE_LEGACY_INPUT_MANAGER
+    if (Input.touchCount > 0 && Input.GetTouch(0).phase == TouchPhase.Began)
+    {
+        posicion = Input.GetTouch(0).position;
+        return true;
+    }
+#endif
+        return false;
     }
 
     private void Disparar(Vector2 posicionPantalla)
     {
-        // Creamos un rayo que va desde donde tocaste en la pantalla hacia el mundo 3D
-        Ray rayo = arCamera.ScreenPointToRay(posicionPantalla);
-        RaycastHit golpe;
+        Debug.Log("Toque detectado en " + posicionPantalla);
 
-        // Lanzamos el rayo (hasta 100 metros de distancia)
-        if (Physics.Raycast(rayo, out golpe, 100f))
+        if (arCamera == null)
         {
-            // Verificamos si el objeto que golpeamos tiene el script "Monster"
-            Monster monstruo = golpe.collider.GetComponent<Monster>();
+            Debug.LogWarning("ARShooter: no hay cámara asignada");
+            return;
+        }
 
+        Ray rayo = arCamera.ScreenPointToRay(posicionPantalla);
+
+        if (Physics.Raycast(rayo, out RaycastHit golpe, 100f))
+        {
+            Debug.Log("El rayo golpeó: " + golpe.collider.name);
+
+            Monster monstruo = golpe.collider.GetComponentInParent<Monster>();
             if (monstruo != null)
-            {
-                // Si es el monstruo, le hacemos daño
                 monstruo.RecibirDano(danoPorDisparo);
-            }
+            else
+                Debug.LogWarning("Ese objeto no tiene el script Monster");
+        }
+        else
+        {
+            Debug.Log("El rayo no golpeó nada");
         }
     }
 }

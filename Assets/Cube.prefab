@@ -125,4 +125,4 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: e88e192f46bb7f140bf643311095054f, type: 3}
   m_Name: 
   m_EditorClassIdentifier: Assembly-CSharp::Monster
-  vidaMaxima: 30
+  vidaMaxima: 50

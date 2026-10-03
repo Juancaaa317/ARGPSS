@@ -1,22 +1,16 @@
-using UnityEngine.Android;
-using Unity.VisualScripting;
-using Unity.XR.CoreUtils;
+using System;
+using System.Collections;
 using UnityEngine;
 using UnityEngine.UI;
-using System.Collections;
-using System;
-
-
-
-
-
+using Unity.XR.CoreUtils;
+#if UNITY_ANDROID
+using UnityEngine.Android;
+#endif
 
 public class ARGPS : MonoBehaviour
 {
-
-
     [SerializeField] private XROrigin sessionOrigin;
-    [SerializeField] private GameObject prefab;
+    [SerializeField] private GameObject prefab; // arrastra aquí el PREFAB (asset)
 
     [SerializeField] private Text distanceText;
     [SerializeField] private Text messageText;
@@ -26,11 +20,12 @@ public class ARGPS : MonoBehaviour
 
     [SerializeField] private float discoveryDistance = 15f;
     [SerializeField] private float spawnDistance = 2f;
-    
-    [SerializeField] private float yOffset = 0.05f;
+    [SerializeField] private float heightBelowCamera = 1.2f;
 
-    private bool gpsEnabled = false;
+    [SerializeField] private RoundManager roundManager;
+
     private bool relicDiscovered = false;
+    private GameObject relicInstance;
 
     public double latitude;
     public double longitude;
@@ -39,151 +34,143 @@ public class ARGPS : MonoBehaviour
     private void Awake()
     {
         if (sessionOrigin == null)
-        sessionOrigin = FindAnyObjectByType<XROrigin>();
-
-        if(!Application.isEditor){
-            
-            if (!Permission.HasUserAuthorizedPermission(Permission.FineLocation))
-            Permission.RequestUserPermission(Permission.FineLocation);
-
-            if (!Permission.HasUserAuthorizedPermission(Permission.Camera))
-            Permission.RequestUserPermission(Permission.Camera);
-        }
-
-        if (prefab == null)
-        prefab.SetActive(false);
+            sessionOrigin = FindAnyObjectByType<XROrigin>();
 
         if (messageText != null)
-        messageText.text = "Busca la reliquia...";
+            messageText.text = "Busca la reliquia...";
     }
 
-    // Start is called once before the first execution of Update after the MonoBehaviour is created
-    void Start()
+    private IEnumerator Start()
     {
-        StartCoroutine(UpdateGPS());
+        yield return AskPermission("android.permission.ACCESS_FINE_LOCATION");
+        yield return AskPermission("android.permission.CAMERA");
+        yield return new WaitForSeconds(0.5f);
+        yield return UpdateGPS();
+    }
+
+    private IEnumerator AskPermission(string permission)
+    {
+#if UNITY_ANDROID && !UNITY_EDITOR
+        if (Permission.HasUserAuthorizedPermission(permission))
+            yield break;
+
+        bool answered = false;
+        var callbacks = new PermissionCallbacks();
+        callbacks.PermissionGranted += _ => answered = true;
+        callbacks.PermissionDenied += _ => answered = true;
+        callbacks.PermissionDeniedAndDontAskAgain += _ => answered = true;
+
+        Permission.RequestUserPermission(permission, callbacks);
+
+        float timeout = 30f;
+        while (!answered && timeout > 0f)
+        {
+            timeout -= Time.unscaledDeltaTime;
+            yield return null;
+        }
+#else
+        yield break;
+#endif
     }
 
     private IEnumerator UpdateGPS()
     {
-        yield return new WaitForSeconds(1f);
-
         if (!Input.location.isEnabledByUser)
         {
-            if(messageText != null)
-            messageText.text = "Activa la ubicacion del dispositivo";
-
+            if (messageText != null)
+                messageText.text = "Activa la ubicación del dispositivo";
             yield break;
         }
 
-        Input.location.Start(10f, 1f);
+        Input.location.Start(5f, 0.5f);
 
         int maxWait = 20;
-
         while (Input.location.status == LocationServiceStatus.Initializing && maxWait > 0)
         {
             yield return new WaitForSeconds(1f);
             maxWait--;
         }
 
-        if(maxWait <= 0)
+        if (Input.location.status != LocationServiceStatus.Running)
         {
             if (messageText != null)
-            messageText.text = "Tiempo agotado iniciando GPS";
-
+                messageText.text = maxWait <= 0
+                    ? "Tiempo agotado iniciando GPS"
+                    : "No se pudo obtener la ubicación";
             yield break;
         }
 
-        if(Input.location.status == LocationServiceStatus.Failed)
+        while (!relicDiscovered)
         {
-            if (messageText != null)
-            messageText.text = "No se pudo obtener la ubicación";
+            if (Input.location.status == LocationServiceStatus.Running)
+            {
+                var data = Input.location.lastData;
+                latitude = data.latitude;
+                longitude = data.longitude;
+                altitude = data.altitude;
 
-            yield break;
+                double distance = CalculateDistance(latitude, longitude, targetLatitude, targetLongitude);
+
+                if (distanceText != null)
+                    distanceText.text = $"Distancia: {distance:F1} m (precisión ±{data.horizontalAccuracy:F0} m)";
+
+                if (distance <= discoveryDistance)
+                    DiscoverRelic((float)distance);
+            }
+
+            yield return new WaitForSeconds(0.5f);
         }
-
-        gpsEnabled = true;
-
-        while (gpsEnabled && !relicDiscovered)
-        {
-            latitude = Input.location.lastData.latitude;
-            longitude = Input.location.lastData.longitude;
-            altitude = Input.location.lastData.altitude;
-
-            float distance = CalculateDistance(latitude, longitude, targetLatitude, targetLongitude);
-
-            if (distanceText != null)
-            distanceText.text = "Distancia : " + distance.ToString("F1") + " m";
-
-            if (distance <=discoveryDistance)
-            DiscoverRelic(distance);
-
-            yield return new WaitForSeconds(1f);
-            
-        }
-        
-
-
-
     }
 
-
-    private float CalculateDistance(double latitude1, double longitude1, double latitude2, double longitude2)
+    private double CalculateDistance(double lat1, double lon1, double lat2, double lon2)
     {
-        double earthRadius = 6371000.0;
-        double lat1 = latitude1 * Mathf.Deg2Rad;
-        double lat2 = latitude2 * Mathf.Deg2Rad;
-        double deltaLat = (latitude2 - latitude1) * Mathf.Deg2Rad;
-        double deltaLon = (longitude2 - longitude1) * Mathf.Deg2Rad;
-
-        double a = Mathf.Sin((float)(deltaLat /2.0)) * MathF.Sin((float)(deltaLat / 2.0))
-        + Mathf.Cos((float)lat1) * Mathf.Cos((float)lat2) * Mathf.Sin((float)(deltaLon / 2.0))
-        * Mathf.Sin((float)(deltaLon /2.0));
-
-        double c = 2.0 * Mathf.Atan2(Mathf.Sqrt((float)a), Mathf.Sqrt((float)(1.0 - a)));
-
-        return (float)(earthRadius * c);
+        const double R = 6371000.0;
+        double dLat = (lat2 - lat1) * Math.PI / 180.0;
+        double dLon = (lon2 - lon1) * Math.PI / 180.0;
+        double a = Math.Sin(dLat / 2) * Math.Sin(dLat / 2)
+                 + Math.Cos(lat1 * Math.PI / 180.0) * Math.Cos(lat2 * Math.PI / 180.0)
+                 * Math.Sin(dLon / 2) * Math.Sin(dLon / 2);
+        double c = 2 * Math.Atan2(Math.Sqrt(a), Math.Sqrt(1 - a));
+        return R * c;
     }
 
     private void DiscoverRelic(float distance)
     {
         relicDiscovered = true;
 
-        if(messageText !=null)
-        messageText.text = "!RELIQUIA ENCONTRADA!";
-
-        if (prefab == null || sessionOrigin == null)
-        return;
-
-        Vector3 spawnPosition = sessionOrigin.transform.position + sessionOrigin.transform.forward * spawnDistance;
-        spawnPosition.y += yOffset;
-
-        Vector3 forward = sessionOrigin.transform.forward;
-        forward.y = 0f;
-
-        if (forward.sqrMagnitude > 0.001f)
-        prefab.transform.rotation = Quaternion.LookRotation(forward);
-
-        prefab.transform.position = spawnPosition;
-        prefab.SetActive(true);
+        if (messageText != null)
+            messageText.text = "¡RELIQUIA ENCONTRADA!";
 
         Input.location.Stop();
-        gpsEnabled = false;
 
-        Debug.Log("Reliquia encontrada a " + distance.ToString("F1") + " metros.");
+        if (roundManager != null)
+        {
+            roundManager.IniciarRondas();
+            return;
+        }
 
+        if (prefab == null || sessionOrigin == null || sessionOrigin.Camera == null)
+            return;
 
+        Transform cam = sessionOrigin.Camera.transform;
 
+        Vector3 forward = cam.forward;
+        forward.y = 0f;
+        if (forward.sqrMagnitude < 0.001f) forward = Vector3.forward;
+        forward.Normalize();
+
+        Vector3 pos = cam.position + forward * spawnDistance;
+        pos.y = cam.position.y - heightBelowCamera;
+
+        // La reliquia mira hacia el jugador
+        relicInstance = Instantiate(prefab, pos, Quaternion.LookRotation(-forward));
+
+        Debug.Log($"Reliquia encontrada a {distance:F1} m. Spawn en {pos}");
     }
 
     private void OnDisable()
     {
-        if (gpsEnabled)
-        {
+        if (Input.location.status != LocationServiceStatus.Stopped)
             Input.location.Stop();
-            gpsEnabled = false;
-        }
     }
-
-    // Update is called once per frame
-  
 }
